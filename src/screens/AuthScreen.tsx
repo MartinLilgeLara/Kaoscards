@@ -1,48 +1,58 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { AuthService } from '../services/authService';
-import { UserProfile } from '../types/game';
+import { supabase } from '../lib/supabase';
 
 interface AuthScreenProps {
-  onAuthenticated: (user: UserProfile) => void;
-  onStartOfflineTest: () => void;
+  onAuthSuccess: (user: any, rememberMe: boolean) => void;
+  notice?: string | null;
 }
 
-export function AuthScreen({
-  onAuthenticated,
-  onStartOfflineTest,
-}: AuthScreenProps) {
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
+export function AuthScreen({ onAuthSuccess, notice }: AuthScreenProps) {
+  const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const passwordInputRef = useRef<TextInput>(null);
+
   const handleSubmit = async () => {
-    setErrorMsg(null);
-    if (!username.trim() || !password) {
+    if (loading) return;
+
+    const cleanUser = username.trim();
+    if (!cleanUser || !password) {
       setErrorMsg('Preencha usuário e senha.');
       return;
     }
 
     setLoading(true);
-    try {
-      const user = isRegisterMode
-        ? await AuthService.register(username, password)
-        : await AuthService.login(username, password);
+    setErrorMsg(null);
 
-      onAuthenticated(user);
+    try {
+      const rpcName = isRegister ? 'register_user' : 'login_user';
+      const { data, error } = await supabase.rpc(rpcName, {
+        p_username: cleanUser,
+        p_password: password,
+      });
+
+      if (error || !data) {
+        throw new Error(error?.message || 'Falha na autenticação.');
+      }
+
+      onAuthSuccess(data, rememberMe);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Falha na autenticação.');
+      setErrorMsg(err.message || 'Erro ao conectar.');
     } finally {
       setLoading(false);
     }
@@ -50,85 +60,109 @@ export function AuthScreen({
 
   return (
     <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
     >
-      <Text style={styles.title}>Kaos CARDS</Text>
-      <Text style={styles.subtitle}>
-        {isRegisterMode ? 'Criar conta de jogador' : 'Entrar na arena'}
-      </Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Usuário</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="ex: martin"
-          placeholderTextColor="#64748b"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={username}
-          onChangeText={setUsername}
-        />
-
-        <Text style={styles.label}>Senha</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••"
-          placeholderTextColor="#64748b"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          disabled={loading}
-          onPress={handleSubmit}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {isRegisterMode ? 'Cadastrar' : 'Entrar'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.switchButton}
-          onPress={() => {
-            setIsRegisterMode(!isRegisterMode);
-            setErrorMsg(null);
-          }}
-        >
-          <Text style={styles.switchText}>
-            {isRegisterMode
-              ? 'Já tem conta? Fazer login'
-              : 'Primeira vez? Criar conta'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        style={styles.offlineButton}
-        onPress={onStartOfflineTest}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.offlineText}>
-          Testar Modo Local (2 Jogadores Offline)
-        </Text>
-      </TouchableOpacity>
+        <View style={styles.card}>
+          <Text style={styles.title}>KAOS CARDS</Text>
+          <Text style={styles.subtitle}>
+            {isRegister ? 'Criar nova conta' : 'Entrar na arena'}
+          </Text>
+
+          {/* Aviso em vermelho caso a conta tenha sido conectada em outro aparelho */}
+          {notice && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>{notice}</Text>
+            </View>
+          )}
+
+          <TextInput
+            style={styles.input}
+            placeholder="Nome de usuário"
+            placeholderTextColor="#64748b"
+            autoCapitalize="none"
+            returnKeyType="next"
+            value={username}
+            onChangeText={setUsername}
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+          />
+
+          <TextInput
+            ref={passwordInputRef}
+            style={styles.input}
+            placeholder="Senha"
+            placeholderTextColor="#64748b"
+            secureTextEntry
+            returnKeyType="go"
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleSubmit}
+          />
+
+          <TouchableOpacity
+            style={styles.rememberRow}
+            activeOpacity={0.75}
+            onPress={() => setRememberMe(!rememberMe)}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.rememberText}>Manter conectado neste aparelho</Text>
+          </TouchableOpacity>
+
+          {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+          <TouchableOpacity
+            style={[styles.submitBtn, loading && styles.disabledBtn]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitText}>
+                {isRegister ? 'Cadastrar e Entrar' : 'Entrar'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.switchBtn}
+            onPress={() => {
+              setErrorMsg(null);
+              setIsRegister(!isRegister);
+            }}
+          >
+            <Text style={styles.switchText}>
+              {isRegister
+                ? 'Já tem conta? Faça login'
+                : 'Não tem conta? Cadastre-se'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
     backgroundColor: '#0f172a',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    padding: 20,
+  },
+  card: {
+    backgroundColor: '#1e293b',
+    padding: 22,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 12,
   },
   title: {
     color: '#f8fafc',
@@ -141,21 +175,20 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 24,
+    marginBottom: 4,
   },
-  card: {
-    backgroundColor: '#1e293b',
-    padding: 20,
-    borderRadius: 16,
+  noticeBox: {
+    backgroundColor: '#450a0a',
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#ef4444',
   },
-  label: {
-    color: '#cbd5e1',
+  noticeText: {
+    color: '#fca5a5',
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 6,
+    textAlign: 'center',
   },
   input: {
     backgroundColor: '#0f172a',
@@ -166,43 +199,64 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: '#334155',
-    marginBottom: 14,
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#64748b',
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#2563eb',
+    borderColor: '#3b82f6',
+  },
+  checkmark: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  rememberText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     color: '#f87171',
     fontSize: 13,
-    marginBottom: 12,
     textAlign: 'center',
   },
-  primaryButton: {
+  submitBtn: {
     backgroundColor: '#2563eb',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     marginTop: 4,
   },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontWeight: '800',
-    fontSize: 15,
+  disabledBtn: {
+    opacity: 0.6,
   },
-  switchButton: {
-    marginTop: 16,
+  submitText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  switchBtn: {
+    paddingVertical: 8,
     alignItems: 'center',
   },
   switchText: {
     color: '#60a5fa',
     fontSize: 13,
-    fontWeight: '600',
-  },
-  offlineButton: {
-    marginTop: 24,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  offlineText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    textDecorationLine: 'underline',
+    fontWeight: '700',
   },
 });

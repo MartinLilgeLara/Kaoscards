@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { CardData, InventoryItem, SavedDeck } from '../types/game';
+import { CardData, InventoryItem, SavedDeck, MatchRecord } from '../types/game';
 import { ICardRepository } from './cardRepo';
 
 export class SupabaseCardRepository implements ICardRepository {
@@ -150,5 +150,106 @@ export class SupabaseCardRepository implements ICardRepository {
       p_session_token: sessionToken,
       p_delta: delta,
     });
+  }
+  async getActiveMatch(sessionToken: string): Promise<MatchRecord | null> {
+    const { data, error } = await supabase.rpc('get_active_match', {
+      p_session_token: sessionToken,
+    });
+    if (error || !data) return null;
+    return data as MatchRecord;
+  }
+
+  async getMatchById(matchId: string): Promise<MatchRecord> {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (error || !data) {
+      throw new Error('Partida não encontrada.');
+    }
+    return data as MatchRecord;
+  }
+
+  async createMatch(
+    sessionToken: string,
+    roomCode: string,
+    isRanked: boolean,
+    blueId: string,
+    redId: string,
+    blueDeck: string[],
+    redDeck: string[]
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('create_match', {
+      p_session_token: sessionToken,
+      p_room_code: roomCode,
+      p_is_ranked: isRanked,
+      p_blue_id: blueId,
+      p_red_id: redId,
+      p_blue_deck: blueDeck,
+      p_red_deck: redDeck,
+    });
+
+    if (error || !data) {
+      throw new Error(error?.message || 'Erro ao criar partida.');
+    }
+    return data as string;
+  }
+
+  async submitTurn(
+    sessionToken: string,
+    matchId: string,
+    cardIndex: number,
+    cardId: string,
+    cellIndex: number,
+    newBoard: any[],
+    flippedIndices: number[]
+  ): Promise<MatchRecord> {
+    const { data, error } = await supabase.rpc('submit_turn', {
+      p_session_token: sessionToken,
+      p_match_id: matchId,
+      p_card_index: cardIndex,
+      p_card_id: cardId,
+      p_cell_index: cellIndex,
+      p_new_board: newBoard,
+      p_flipped_indices: flippedIndices,
+    });
+
+    if (error || !data) {
+      throw new Error(error?.message || 'Erro ao enviar jogada.');
+    }
+    return data as MatchRecord;
+  }
+
+  async expireInactiveMatch(
+    sessionToken: string,
+    matchId: string
+  ): Promise<MatchRecord> {
+    const { data, error } = await supabase.rpc('expire_inactive_match', {
+      p_session_token: sessionToken,
+      p_match_id: matchId,
+    });
+
+    if (error || !data) {
+      throw new Error(error?.message || 'Erro ao encerrar partida inativa.');
+    }
+    return data as MatchRecord;
+  }
+
+  async getUserProfile(userId: string): Promise<{ elo_rating: number }> {
+    const { data } = await supabase
+      .from('users')
+      .select('elo_rating')
+      .eq('id', userId)
+      .single();
+    return { elo_rating: data?.elo_rating ?? 1000 };
+  }
+  async checkSession(sessionToken: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('check_session', {
+      p_session_token: sessionToken,
+    });
+    if (error) return true; // Evita deslogar em queda momentânea de rede
+    return Boolean(data);
   }
 }

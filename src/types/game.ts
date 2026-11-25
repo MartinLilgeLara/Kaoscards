@@ -61,3 +61,27 @@ export interface SavedDeck {
   card_ids: string[];
   is_active: boolean;
 }
+export interface BoardCell {
+  card: CardData;
+  owner: 'BLUE' | 'RED';
+}
+
+export interface MatchRecord {
+  id: string;
+  room_code: string;
+  is_ranked: boolean;
+  status: 'active' | 'finished' | 'abandoned';
+  blue_player_id: string;
+  red_player_id: string;
+  blue_username: string;
+  red_username: string;
+  blue_deck_ids: string[];
+  red_deck_ids: string[];
+  current_turn: 'BLUE' | 'RED';
+  turn_number: number;
+  board_state: (BoardCell | null)[];
+  blue_used_indices: number[];
+  red_used_indices: number[];
+  winner: 'BLUE' | 'RED' | 'DRAW' | null;
+  turn_started_at: string;
+}
