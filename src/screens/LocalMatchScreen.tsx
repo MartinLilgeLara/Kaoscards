@@ -75,10 +75,8 @@ export function LocalMatchScreen({
   const maxBoardByWidth = containerWidth - 24;
   const boardSize = Math.max(210, Math.min(maxBoardByWidth, maxBoardByHeight, 360));
 
-  const blueScore =
-    board.filter((c) => c?.owner === 'BLUE').length + (5 - blueUsed.length);
-  const redScore =
-    board.filter((c) => c?.owner === 'RED').length + (5 - redUsed.length);
+    const blueScore = board.filter((c) => c?.owner === 'BLUE').length;
+    const redScore = board.filter((c) => c?.owner === 'RED').length;
 
   const isGameOver = blueUsed.length + redUsed.length >= 9;
   const winner: 'BLUE' | 'RED' | 'DRAW' | null = !isGameOver

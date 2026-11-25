@@ -190,10 +190,8 @@ export function MatchScreen({
     mySide === 'BLUE' ? match.red_used_indices : match.blue_used_indices;
 
   const board = match.board_state;
-  const myScore =
-    board.filter((c) => c?.owner === mySide).length + (5 - myUsed.length);
-  const oppScore =
-    board.filter((c) => c?.owner === oppSide).length + (5 - oppUsed.length);
+  const myScore = board.filter((c) => c?.owner === mySide).length;
+const oppScore = board.filter((c) => c?.owner === oppSide).length;
 
   const resolveCaptures = (
     currentBoard: (BoardCell | null)[],

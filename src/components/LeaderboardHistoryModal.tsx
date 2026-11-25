@@ -200,8 +200,8 @@ export function LeaderboardHistoryModal({
                       ? m.blue_used_indices.length
                       : m.red_used_indices.length;
 
-                  const myScore = myBoard + (5 - myUsed);
-                  const oppScore = oppBoard + (5 - oppUsed);
+                    const myScore = myBoard;
+                    const oppScore = oppBoard;
 
                   const isWin = m.winner === mySide;
                   const isDraw = m.winner === 'DRAW';
