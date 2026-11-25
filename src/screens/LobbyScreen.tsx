@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { CardView } from '../components/CardView';
+import { LeaderboardHistoryModal } from '../components/LeaderboardHistoryModal';
 import { supabase } from '../lib/supabase';
 import { SupabaseCardRepository } from '../repositories/supabaseCardRepo';
 import { CardData, MatchRecord, SavedDeck } from '../types/game';
@@ -47,6 +48,7 @@ export function LobbyScreen({
   const [showLocalSetup, setShowLocalSetup] = useState(false);
   const [localBlueDeckId, setLocalBlueDeckId] = useState<string | null>(null);
   const [localRedDeckId, setLocalRedDeckId] = useState<string | null>(null);
+  const [statsModalTab, setStatsModalTab] = useState<'RANKING' | 'HISTORY' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const channelRef = useRef<any>(null);
@@ -436,10 +438,35 @@ export function LobbyScreen({
               Escolha qualquer baralho salvo para cada lado
             </Text>
           </TouchableOpacity>
+
+          {/* Ranking e Histórico de Partidas */}
+          <View style={styles.statsRow}>
+            <TouchableOpacity
+              style={[styles.localBtn, styles.statsBtn]}
+              onPress={() => setStatsModalTab('RANKING')}
+            >
+              <Text style={styles.primaryBtnText}>🏆 Ranking</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.localBtn, styles.statsBtn]}
+              onPress={() => setStatsModalTab('HISTORY')}
+            >
+              <Text style={styles.primaryBtnText}>📜 Histórico</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
       {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+      <LeaderboardHistoryModal
+        visible={statsModalTab !== null}
+        initialTab={statsModalTab || 'RANKING'}
+        user={user}
+        repo={repo}
+        onClose={() => setStatsModalTab(null)}
+      />
     </ScrollView>
   );
 }
@@ -608,6 +635,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statsBtn: {
+    flex: 1,
   },
   localSetupHeader: {
     flexDirection: 'row',

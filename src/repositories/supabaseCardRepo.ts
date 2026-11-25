@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { CardData, InventoryItem, SavedDeck, MatchRecord } from '../types/game';
+import { CardData, InventoryItem, SavedDeck, MatchRecord, LeaderboardEntry } from '../types/game';
 import { ICardRepository } from './cardRepo';
 
 export class SupabaseCardRepository implements ICardRepository {
@@ -251,5 +251,22 @@ export class SupabaseCardRepository implements ICardRepository {
     });
     if (error) return true; // Evita deslogar em queda momentânea de rede
     return Boolean(data);
+  }
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    const { data, error } = await supabase.rpc('get_leaderboard');
+    if (error || !data) {
+      throw new Error(error?.message || 'Erro ao carregar ranking.');
+    }
+    return data as LeaderboardEntry[];
+  }
+
+  async getMatchHistory(sessionToken: string): Promise<MatchRecord[]> {
+    const { data, error } = await supabase.rpc('get_match_history', {
+      p_session_token: sessionToken,
+    });
+    if (error || !data) {
+      throw new Error(error?.message || 'Erro ao carregar histórico.');
+    }
+    return data as MatchRecord[];
   }
 }

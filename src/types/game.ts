@@ -84,4 +84,15 @@ export interface MatchRecord {
   red_used_indices: number[];
   winner: 'BLUE' | 'RED' | 'DRAW' | null;
   turn_started_at: string;
+  turns_log?: any[];
+  finished_at?: string | null;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  username: string;
+  elo_rating: number;
+  role: string;
+  ranked_wins: number;
+  ranked_matches: number;
 }
