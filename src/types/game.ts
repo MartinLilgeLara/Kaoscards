@@ -11,6 +11,8 @@ export interface CardData {
   id: string;
   name: string;
   stats: CardStats;
+  blue_image_url?: string | null;
+  red_image_url?: string | null;
 }
 
 export interface PlayedCard extends CardData {
