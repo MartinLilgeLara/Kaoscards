@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { invokeEdge } from '../lib/supabase';
 
 interface AuthScreenProps {
   onAuthSuccess: (user: any, rememberMe: boolean) => void;
@@ -40,15 +40,14 @@ export function AuthScreen({ onAuthSuccess, notice }: AuthScreenProps) {
     setErrorMsg(null);
 
     try {
-      const rpcName = isRegister ? 'register_user' : 'login_user';
-      const { data, error } = await supabase.rpc(rpcName, {
-        p_username: cleanUser,
-        p_password: password,
+      const action = isRegister ? 'register' : 'login';
+      const data = await invokeEdge('auth', {
+        action,
+        username: cleanUser,
+        password,
       });
 
-      if (error || !data) {
-        throw new Error(error?.message || 'Falha na autenticação.');
-      }
+
 
       onAuthSuccess(data, rememberMe);
     } catch (err: any) {

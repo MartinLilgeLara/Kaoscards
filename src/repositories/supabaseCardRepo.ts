@@ -1,5 +1,11 @@
-import { supabase } from '../lib/supabase';
-import { CardData, InventoryItem, SavedDeck, MatchRecord, LeaderboardEntry } from '../types/game';
+import { invokeEdge, supabase } from '../lib/supabase';
+import {
+  CardData,
+  InventoryItem,
+  LeaderboardEntry,
+  MatchRecord,
+  SavedDeck,
+} from '../types/game';
 import { ICardRepository } from './cardRepo';
 
 function mapRowToCardData(row: any): CardData {
@@ -23,6 +29,7 @@ export class SupabaseCardRepository implements ICardRepository {
     if (error || !data) {
       throw new Error(error?.message || 'Erro ao carregar catálogo de cartas.');
     }
+
     return data.map(mapRowToCardData);
   }
 
@@ -49,7 +56,9 @@ export class SupabaseCardRepository implements ICardRepository {
   async getUserInventory(userId: string): Promise<InventoryItem[]> {
     const { data, error } = await supabase
       .from('user_inventory')
-      .select('id, cards (id, name, north, east, south, west, blue_image_url, red_image_url)')
+      .select(
+        'id, cards (id, name, north, east, south, west, blue_image_url, red_image_url)'
+      )
       .eq('user_id', userId);
 
     if (error || !data) {
@@ -101,46 +110,38 @@ export class SupabaseCardRepository implements ICardRepository {
       throw new Error('O baralho precisa ter exatamente 5 cartas.');
     }
 
-    const { data, error } = await supabase.rpc('save_deck', {
-      p_session_token: sessionToken,
-      p_deck_id: deckId,
-      p_name: name,
-      p_card_ids: cardIds,
-      p_equip: equip,
+    const data = await invokeEdge<{ id: string }>('decks', {
+      action: 'save_deck',
+      session_token: sessionToken,
+      deck_id: deckId,
+      name,
+      card_ids: cardIds,
+      equip,
     });
 
-    if (error) {
-      throw new Error(error.message || 'Falha ao salvar o baralho no banco.');
-    }
-
-    return data as string;
+    return data.id;
   }
 
   async setActiveDeck(sessionToken: string, deckId: string): Promise<string[]> {
-    const { data, error } = await supabase.rpc('set_active_deck', {
-      p_session_token: sessionToken,
-      p_deck_id: deckId,
+    const data = await invokeEdge<{ card_ids: string[] }>('decks', {
+      action: 'set_active_deck',
+      session_token: sessionToken,
+      deck_id: deckId,
     });
 
-    if (error) {
-      throw new Error(error.message || 'Falha ao equipar o baralho.');
-    }
-
-    return data as string[];
+    return data.card_ids;
   }
 
-  async updateUserElo(sessionToken: string, delta: number): Promise<void> {
-    await supabase.rpc('update_elo', {
-      p_session_token: sessionToken,
-      p_delta: delta,
-    });
-  }
   async getActiveMatch(sessionToken: string): Promise<MatchRecord | null> {
-    const { data, error } = await supabase.rpc('get_active_match', {
-      p_session_token: sessionToken,
-    });
-    if (error || !data) return null;
-    return data as MatchRecord;
+    try {
+      const data = await invokeEdge<{ match: MatchRecord | null }>('match', {
+        action: 'get_active_match',
+        session_token: sessionToken,
+      });
+      return data?.match ?? null;
+    } catch {
+      return null;
+    }
   }
 
   async getMatchById(matchId: string): Promise<MatchRecord> {
@@ -165,20 +166,18 @@ export class SupabaseCardRepository implements ICardRepository {
     blueDeck: string[],
     redDeck: string[]
   ): Promise<string> {
-    const { data, error } = await supabase.rpc('create_match', {
-      p_session_token: sessionToken,
-      p_room_code: roomCode,
-      p_is_ranked: isRanked,
-      p_blue_id: blueId,
-      p_red_id: redId,
-      p_blue_deck: blueDeck,
-      p_red_deck: redDeck,
+    const data = await invokeEdge<{ id: string }>('match', {
+      action: 'create_match',
+      session_token: sessionToken,
+      room_code: roomCode,
+      is_ranked: isRanked,
+      blue_id: blueId,
+      red_id: redId,
+      blue_deck: blueDeck,
+      red_deck: redDeck,
     });
 
-    if (error || !data) {
-      throw new Error(error?.message || 'Erro ao criar partida.');
-    }
-    return data as string;
+    return data.id;
   }
 
   async submitTurn(
@@ -190,35 +189,31 @@ export class SupabaseCardRepository implements ICardRepository {
     newBoard: any[],
     flippedIndices: number[]
   ): Promise<MatchRecord> {
-    const { data, error } = await supabase.rpc('submit_turn', {
-      p_session_token: sessionToken,
-      p_match_id: matchId,
-      p_card_index: cardIndex,
-      p_card_id: cardId,
-      p_cell_index: cellIndex,
-      p_new_board: newBoard,
-      p_flipped_indices: flippedIndices,
+    const data = await invokeEdge<{ match: MatchRecord }>('match', {
+      action: 'submit_turn',
+      session_token: sessionToken,
+      match_id: matchId,
+      card_index: cardIndex,
+      card_id: cardId,
+      cell_index: cellIndex,
+      new_board: newBoard,
+      flipped_indices: flippedIndices,
     });
 
-    if (error || !data) {
-      throw new Error(error?.message || 'Erro ao enviar jogada.');
-    }
-    return data as MatchRecord;
+    return data.match;
   }
 
   async expireInactiveMatch(
     sessionToken: string,
     matchId: string
   ): Promise<MatchRecord> {
-    const { data, error } = await supabase.rpc('expire_inactive_match', {
-      p_session_token: sessionToken,
-      p_match_id: matchId,
+    const data = await invokeEdge<{ match: MatchRecord }>('match', {
+      action: 'expire_inactive_match',
+      session_token: sessionToken,
+      match_id: matchId,
     });
 
-    if (error || !data) {
-      throw new Error(error?.message || 'Erro ao encerrar partida inativa.');
-    }
-    return data as MatchRecord;
+    return data.match;
   }
 
   async getUserProfile(userId: string): Promise<{ elo_rating: number }> {
@@ -229,28 +224,31 @@ export class SupabaseCardRepository implements ICardRepository {
       .single();
     return { elo_rating: data?.elo_rating ?? 1000 };
   }
+
   async checkSession(sessionToken: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc('check_session', {
-      p_session_token: sessionToken,
-    });
-    if (error) return true; // Evita deslogar em queda momentânea de rede
-    return Boolean(data);
-  }
-  async getLeaderboard(): Promise<LeaderboardEntry[]> {
-    const { data, error } = await supabase.rpc('get_leaderboard');
-    if (error || !data) {
-      throw new Error(error?.message || 'Erro ao carregar ranking.');
+    try {
+      const data = await invokeEdge<{ valid: boolean }>('auth', {
+        action: 'check_session',
+        session_token: sessionToken,
+      });
+      return Boolean(data?.valid);
+    } catch {
+      return true; // Evita deslogar em queda momentânea de rede
     }
-    return data as LeaderboardEntry[];
+  }
+
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    const data = await invokeEdge<{ leaderboard: LeaderboardEntry[] }>('stats', {
+      action: 'get_leaderboard',
+    });
+    return data.leaderboard ?? [];
   }
 
   async getMatchHistory(sessionToken: string): Promise<MatchRecord[]> {
-    const { data, error } = await supabase.rpc('get_match_history', {
-      p_session_token: sessionToken,
+    const data = await invokeEdge<{ matches: MatchRecord[] }>('stats', {
+      action: 'get_match_history',
+      session_token: sessionToken,
     });
-    if (error || !data) {
-      throw new Error(error?.message || 'Erro ao carregar histórico.');
-    }
-    return data as MatchRecord[];
+    return data.matches ?? [];
   }
 }

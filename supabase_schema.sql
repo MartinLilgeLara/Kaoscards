@@ -116,3 +116,20 @@ CREATE POLICY "allow_read_decks" ON public.decks FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "allow_read_matches" ON public.matches;
 CREATE POLICY "allow_read_matches" ON public.matches FOR SELECT USING (true);
+
+-- Libera o uso do schema public
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Dá acesso total às tabelas e sequências para as Edge Functions (service_role)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
+-- Dá permissão de leitura para o app (Realtime e consultas SELECT)
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+
+-- Garante que tabelas futuras criadas pelo SQL Editor já nasçam com essas permissões
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES TO service_role;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT SELECT ON TABLES TO anon, authenticated;
