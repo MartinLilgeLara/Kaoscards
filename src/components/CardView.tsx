@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { CardData, PlayerColor } from '../types/game';
 
 interface CardViewProps {
@@ -18,7 +18,16 @@ export function CardView({
   faceDown = false,
 }: CardViewProps) {
   const backgroundColor = owner === 'BLUE' ? '#1d4ed8' : '#b91c1c';
-  const borderColor = isSelected ? '#facc15' : owner === 'BLUE' ? '#60a5fa' : '#f87171';
+  const borderColor = isSelected
+    ? '#facc15'
+    : owner === 'BLUE'
+    ? '#60a5fa'
+    : '#f87171';
+
+  const imageUrl =
+    owner === 'BLUE'
+      ? card.blue_image_url || card.red_image_url
+      : card.red_image_url || card.blue_image_url;
 
   if (faceDown) {
     return (
@@ -26,11 +35,7 @@ export function CardView({
         style={[
           styles.card,
           styles.faceDownCard,
-          {
-            backgroundColor,
-            borderColor,
-            borderWidth: 1.5,
-          },
+          { backgroundColor, borderColor, borderWidth: 1.5 },
         ]}
       >
         <Text style={styles.faceDownText}>?</Text>
@@ -49,6 +54,17 @@ export function CardView({
         },
       ]}
     >
+      {imageUrl ? (
+        <>
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.artImage}
+            resizeMode="cover"
+          />
+          <View style={styles.readabilityScrim} />
+        </>
+      ) : null}
+
       <Text style={[styles.statText, compact && styles.statCompact]}>
         {card.stats.north}
       </Text>
@@ -84,6 +100,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     justifyContent: 'space-between',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  artImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  readabilityScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 6, 23, 0.28)',
   },
   faceDownCard: {
     justifyContent: 'center',
@@ -103,18 +129,24 @@ const styles = StyleSheet.create({
   },
   statText: {
     color: '#ffffff',
-    fontWeight: '800',
+    fontWeight: '900',
     fontSize: 15,
+    textShadowColor: 'rgba(0, 0, 0, 0.95)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   statCompact: {
     fontSize: 13,
   },
   cardName: {
-    color: '#e2e8f0',
+    color: '#f8fafc',
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: '700',
     maxWidth: '58%',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.95)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   nameCompact: {
     fontSize: 8,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ImageBackground, // <--- ALTERADO: adicionado ImageBackground
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -25,6 +26,10 @@ interface MatchScreenProps {
 
 const INACTIVITY_LIMIT_SEC = 180; // 3 minutos
 const WARNING_THRESHOLD_SEC = 60; // Mostra timer nos últimos 60s
+
+// <--- ALTERADO: Cole aqui a URL pública da imagem do tabuleiro no Supabase Storage
+// (Se preferir usar arquivo local em assets/, troque o source do ImageBackground por: require('../../assets/board.png'))
+const BOARD_IMAGE_URL: string | null = 'https://auzducmbonumgyvevlqi.supabase.co/storage/v1/object/public/KaoscardsImages/Tabuleiro.jpg';
 
 export function MatchScreen({
   matchId,
@@ -191,7 +196,7 @@ export function MatchScreen({
 
   const board = match.board_state;
   const myScore = board.filter((c) => c?.owner === mySide).length;
-const oppScore = board.filter((c) => c?.owner === oppSide).length;
+  const oppScore = board.filter((c) => c?.owner === oppSide).length;
 
   const resolveCaptures = (
     currentBoard: (BoardCell | null)[],
@@ -366,19 +371,27 @@ const oppScore = board.filter((c) => c?.owner === oppSide).length;
         })}
       </View>
 
-      {/* Responsive 3x3 Arena Grid */}
-      <View style={[styles.board, { width: boardSize, height: boardSize }]}>
-        {board.map((cell, idx) => (
-          <TouchableOpacity
-            key={idx}
-            style={styles.cell}
-            disabled={!isMyTurn || cell !== null || submitting}
-            onPress={() => handleCellPress(idx)}
-          >
-            {cell && <CardView card={cell.card} owner={cell.owner} />}
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* <--- ALTERADO: Tabuleiro 3x3 agora usa ImageBackground */}
+      <ImageBackground
+        source={BOARD_IMAGE_URL ? { uri: BOARD_IMAGE_URL } : undefined}
+        resizeMode="cover"
+        imageStyle={{ borderRadius: 13 }}
+        style={[styles.board, { width: boardSize, height: boardSize }]}
+      >
+        {board.map((cell, idx) => {
+          const canPlace = isMyTurn && cell === null && selectedCardIdx !== null;
+          return (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.cell, canPlace && styles.cellHighlight]}
+              disabled={!isMyTurn || cell !== null || submitting}
+              onPress={() => handleCellPress(idx)}
+            >
+              {cell && <CardView card={cell.card} owner={cell.owner} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ImageBackground>
 
       {/* Player Hand */}
       <View style={[styles.handRow, { height: handHeight }]}>
@@ -577,6 +590,7 @@ const styles = StyleSheet.create({
   usedSlot: {
     opacity: 0.18,
   },
+  // <--- ALTERADO: overflow hidden + células semitransparentes para mostrar a imagem do tabuleiro
   board: {
     alignSelf: 'center',
     backgroundColor: '#1e293b',
@@ -588,15 +602,21 @@ const styles = StyleSheet.create({
     alignContent: 'space-between',
     borderWidth: 1,
     borderColor: '#334155',
+    overflow: 'hidden',
   },
   cell: {
     width: '31.5%',
     height: '31.5%',
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(148, 163, 184, 0.35)',
     padding: 2,
+  },
+  cellHighlight: {
+    borderColor: '#facc15',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(30, 41, 59, 0.55)',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

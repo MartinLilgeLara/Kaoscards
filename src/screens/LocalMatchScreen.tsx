@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  ImageBackground, // <--- ALTERADO: adicionado ImageBackground
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,6 +18,9 @@ interface LocalMatchScreenProps {
   repo: SupabaseCardRepository;
   onExit: () => void;
 }
+
+// <--- ALTERADO: Mesma URL (ou require) do tabuleiro online
+const BOARD_IMAGE_URL: string | null = 'https://auzducmbonumgyvevlqi.supabase.co/storage/v1/object/public/KaoscardsImages/Tabuleiro.jpg';
 
 export function LocalMatchScreen({
   blueDeck,
@@ -75,8 +79,8 @@ export function LocalMatchScreen({
   const maxBoardByWidth = containerWidth - 24;
   const boardSize = Math.max(210, Math.min(maxBoardByWidth, maxBoardByHeight, 360));
 
-    const blueScore = board.filter((c) => c?.owner === 'BLUE').length;
-    const redScore = board.filter((c) => c?.owner === 'RED').length;
+  const blueScore = board.filter((c) => c?.owner === 'BLUE').length;
+  const redScore = board.filter((c) => c?.owner === 'RED').length;
 
   const isGameOver = blueUsed.length + redUsed.length >= 9;
   const winner: 'BLUE' | 'RED' | 'DRAW' | null = !isGameOver
@@ -204,19 +208,27 @@ export function LocalMatchScreen({
         })}
       </View>
 
-      {/* 3x3 Board */}
-      <View style={[styles.board, { width: boardSize, height: boardSize }]}>
-        {board.map((cell, idx) => (
-          <TouchableOpacity
-            key={idx}
-            style={styles.cell}
-            disabled={isGameOver || cell !== null || selectedCardIdx === null}
-            onPress={() => handleCellPress(idx)}
-          >
-            {cell && <CardView card={cell.card} owner={cell.owner} />}
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* <--- ALTERADO: Tabuleiro 3x3 agora usa ImageBackground */}
+      <ImageBackground
+        source={BOARD_IMAGE_URL ? { uri: BOARD_IMAGE_URL } : undefined}
+        resizeMode="cover"
+        imageStyle={{ borderRadius: 13 }}
+        style={[styles.board, { width: boardSize, height: boardSize }]}
+      >
+        {board.map((cell, idx) => {
+          const canPlace = !isGameOver && cell === null && selectedCardIdx !== null;
+          return (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.cell, canPlace && styles.cellHighlight]}
+              disabled={!canPlace}
+              onPress={() => handleCellPress(idx)}
+            >
+              {cell && <CardView card={cell.card} owner={cell.owner} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ImageBackground>
 
       {/* Blue Player Hand (Bottom) */}
       <View style={[styles.handRow, { height: handHeight }]}>
@@ -356,6 +368,7 @@ const styles = StyleSheet.create({
   usedSlot: {
     opacity: 0.18,
   },
+  // <--- ALTERADO: overflow hidden + células semitransparentes para mostrar a imagem do tabuleiro
   board: {
     alignSelf: 'center',
     backgroundColor: '#1e293b',
@@ -367,15 +380,21 @@ const styles = StyleSheet.create({
     alignContent: 'space-between',
     borderWidth: 1,
     borderColor: '#334155',
+    overflow: 'hidden',
   },
   cell: {
     width: '31.5%',
     height: '31.5%',
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(148, 163, 184, 0.35)',
     padding: 2,
+  },
+  cellHighlight: {
+    borderColor: '#facc15',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(30, 41, 59, 0.55)',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

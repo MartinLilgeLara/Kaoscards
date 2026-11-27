@@ -2,23 +2,28 @@ import { supabase } from '../lib/supabase';
 import { CardData, InventoryItem, SavedDeck, MatchRecord, LeaderboardEntry } from '../types/game';
 import { ICardRepository } from './cardRepo';
 
+function mapRowToCardData(row: any): CardData {
+  return {
+    id: row.id,
+    name: row.name,
+    stats: {
+      north: row.north,
+      east: row.east,
+      south: row.south,
+      west: row.west,
+    },
+    blue_image_url: row.blue_image_url ?? null,
+    red_image_url: row.red_image_url ?? null,
+  };
+}
+
 export class SupabaseCardRepository implements ICardRepository {
   async getAllCards(): Promise<CardData[]> {
     const { data, error } = await supabase.from('cards').select('*');
     if (error || !data) {
       throw new Error(error?.message || 'Erro ao carregar catálogo de cartas.');
     }
-
-    return data.map((row) => ({
-      id: row.id,
-      name: row.name,
-      stats: {
-        north: row.north,
-        east: row.east,
-        south: row.south,
-        west: row.west,
-      },
-    }));
+    return data.map(mapRowToCardData);
   }
 
   async getCardsByIds(ids: string[]): Promise<CardData[]> {
@@ -33,19 +38,7 @@ export class SupabaseCardRepository implements ICardRepository {
     if (error || !data) return [];
 
     const map = new Map<string, CardData>(
-      data.map((row) => [
-        row.id,
-        {
-          id: row.id,
-          name: row.name,
-          stats: {
-            north: row.north,
-            east: row.east,
-            south: row.south,
-            west: row.west,
-          },
-        },
-      ])
+      data.map((row) => [row.id, mapRowToCardData(row)])
     );
 
     return ids
@@ -56,7 +49,7 @@ export class SupabaseCardRepository implements ICardRepository {
   async getUserInventory(userId: string): Promise<InventoryItem[]> {
     const { data, error } = await supabase
       .from('user_inventory')
-      .select('id, cards (id, name, north, east, south, west)')
+      .select('id, cards (id, name, north, east, south, west, blue_image_url, red_image_url)')
       .eq('user_id', userId);
 
     if (error || !data) {
@@ -67,16 +60,7 @@ export class SupabaseCardRepository implements ICardRepository {
       .filter((row: any) => row.cards)
       .map((row: any) => ({
         inventoryId: row.id,
-        card: {
-          id: row.cards.id,
-          name: row.cards.name,
-          stats: {
-            north: row.cards.north,
-            east: row.cards.east,
-            south: row.cards.south,
-            west: row.cards.west,
-          },
-        },
+        card: mapRowToCardData(row.cards),
       }));
   }
 
