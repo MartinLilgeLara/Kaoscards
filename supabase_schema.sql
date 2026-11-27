@@ -1,101 +1,118 @@
--- Referência completa do banco de dados no Supabase (SQL Editor)
+-- ============================================================================
+-- KAOS CARDS - SCHEMA ESTRUTURAL DO BANCO (POSTGRESQL / SUPABASE)
+-- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
-CREATE TABLE IF NOT EXISTS users (
+-- 1. USUÁRIOS
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'student',
-  elo_rating INT NOT NULL DEFAULT 1200,
-  created_at TIMESTAMPTZ DEFAULT now()
+  elo_rating INT NOT NULL DEFAULT 1000,
+  session_token TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS cards (
+CREATE INDEX IF NOT EXISTS idx_users_session_token ON public.users (session_token);
+
+-- 2. CATÁLOGO DE CARTAS
+CREATE TABLE IF NOT EXISTS public.cards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   north INT NOT NULL,
   east INT NOT NULL,
   south INT NOT NULL,
-  west INT NOT NULL
+  west INT NOT NULL,
+  rarity TEXT NOT NULL DEFAULT 'starter',
+  blue_image_url TEXT,
+  red_image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS user_inventory (
+-- 3. INVENTÁRIO DOS JOGADORES
+CREATE TABLE IF NOT EXISTS public.user_inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  card_id UUID REFERENCES cards(id) ON DELETE CASCADE
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  card_id UUID NOT NULL REFERENCES public.cards(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, card_id)
 );
 
-CREATE TABLE IF NOT EXISTS decks (
+CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id ON public.user_inventory (user_id);
+
+-- 4. BARALHOS SALVOS (ATÉ 5 POR JOGADOR)
+CREATE TABLE IF NOT EXISTS public.decks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Baralho 1',
   card_ids UUID[] NOT NULL DEFAULT '{}',
-  updated_at TIMESTAMPTZ DEFAULT now()
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE OR REPLACE FUNCTION register_user(p_username TEXT, p_password TEXT)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, extensions
-AS $$
-DECLARE
-  v_user users;
-  v_starter_ids UUID[];
+CREATE INDEX IF NOT EXISTS idx_decks_user_id ON public.decks (user_id);
+
+-- 5. PARTIDAS ONLINE (RANQUEADAS E SALAS PRIVADAS)
+CREATE TABLE IF NOT EXISTS public.matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_code TEXT NOT NULL,
+  is_ranked BOOLEAN NOT NULL DEFAULT false,
+  status TEXT NOT NULL DEFAULT 'active', -- 'active' | 'finished' | 'abandoned'
+  blue_player_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  red_player_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  blue_username TEXT NOT NULL DEFAULT 'Azul',
+  red_username TEXT NOT NULL DEFAULT 'Vermelho',
+  blue_deck_ids UUID[] NOT NULL DEFAULT '{}',
+  red_deck_ids UUID[] NOT NULL DEFAULT '{}',
+  current_turn TEXT NOT NULL DEFAULT 'BLUE', -- 'BLUE' | 'RED'
+  turn_number INT NOT NULL DEFAULT 1,
+  board_state JSONB NOT NULL DEFAULT '[null,null,null,null,null,null,null,null,null]'::jsonb,
+  blue_used_indices INT[] NOT NULL DEFAULT '{}',
+  red_used_indices INT[] NOT NULL DEFAULT '{}',
+  winner TEXT, -- 'BLUE' | 'RED' | 'DRAW' | NULL
+  turns_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+  turn_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_matches_status ON public.matches (status);
+CREATE INDEX IF NOT EXISTS idx_matches_players ON public.matches (blue_player_id, red_player_id);
+CREATE INDEX IF NOT EXISTS idx_matches_room_code ON public.matches (room_code);
+
+-- ============================================================================
+-- REALTIME (ESCUTA DE SESSÃO ÚNICA E ATUALIZAÇÃO DE PARTIDAS)
+-- ============================================================================
+DO $$
 BEGIN
-  IF length(trim(p_username)) < 3 OR length(p_password) < 4 THEN
-    RAISE EXCEPTION 'Usuário deve ter 3+ letras e senha 4+ caracteres.';
-  END IF;
-
-  INSERT INTO users (username, password_hash)
-  VALUES (lower(trim(p_username)), crypt(p_password, gen_salt('bf')))
-  RETURNING * INTO v_user;
-
-  WITH picked AS (
-    INSERT INTO user_inventory (user_id, card_id)
-    SELECT v_user.id, id FROM cards ORDER BY random() LIMIT 5
-    RETURNING card_id
-  )
-  SELECT array_agg(card_id) INTO v_starter_ids FROM picked;
-
-  INSERT INTO decks (user_id, card_ids)
-  VALUES (v_user.id, v_starter_ids);
-
-  RETURN json_build_object(
-    'id', v_user.id,
-    'username', v_user.username,
-    'role', v_user.role,
-    'elo_rating', v_user.elo_rating
-  );
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.users, public.matches;
 EXCEPTION
-  WHEN unique_violation THEN
-    RAISE EXCEPTION 'Este nome de usuário já está em uso.';
-END;
-$$;
+  WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE OR REPLACE FUNCTION login_user(p_username TEXT, p_password TEXT)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, extensions
-AS $$
-DECLARE
-  v_user users;
-BEGIN
-  SELECT * INTO v_user
-  FROM users
-  WHERE username = lower(trim(p_username))
-    AND password_hash = crypt(p_password, password_hash);
+-- ============================================================================
+-- ROW LEVEL SECURITY (LEITURA LIBERADA PARA O APP / ESCRITA APENAS VIA BACKEND)
+-- ============================================================================
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.decks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Usuário ou senha inválidos.';
-  END IF;
+DROP POLICY IF EXISTS "allow_read_users" ON public.users;
+CREATE POLICY "allow_read_users" ON public.users FOR SELECT USING (true);
 
-  RETURN json_build_object(
-    'id', v_user.id,
-    'username', v_user.username,
-    'role', v_user.role,
-    'elo_rating', v_user.elo_rating
-  );
-END;
-$$;
+DROP POLICY IF EXISTS "allow_read_cards" ON public.cards;
+CREATE POLICY "allow_read_cards" ON public.cards FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "allow_read_inventory" ON public.user_inventory;
+CREATE POLICY "allow_read_inventory" ON public.user_inventory FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "allow_read_decks" ON public.decks;
+CREATE POLICY "allow_read_decks" ON public.decks FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "allow_read_matches" ON public.matches;
+CREATE POLICY "allow_read_matches" ON public.matches FOR SELECT USING (true);
